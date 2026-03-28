@@ -1,10 +1,14 @@
 //  Data Source: https://open.canada.ca/data/en/dataset/88078c92-d9e7-4123-8881-359fb3f5d608
+//  Map image source reference: https://en.wikipedia.org/wiki/Provinces_and_territories_of_Canada
 //  Have idea of the graph inside a screen 
 //  Have a map of canada and highlight the provinces
 //  Have the abstract map then allow people to hover to view info
 
 const svgWidth = 1000;
 const svgHeight = 500;
+
+const DATA_SOURCE_URL = "https://open.canada.ca/data/en/dataset/88078c92-d9e7-4123-8881-359fb3f5d608";
+const MAP_IMAGE_SOURCE_URL = "https://en.wikipedia.org/wiki/Provinces_and_territories_of_Canada";
 
 let svg = d3.select("#map-area").append("svg")
             .attr("width", svgWidth)
@@ -177,6 +181,42 @@ d3.csv("data/22100073.csv").then(function(data){
     let particleLayer = viewport.append("g").attr("class", "particle-layer");
     let labelLayer = viewport.append("g").attr("class", "label-layer");
     let uiLayer = viewport.append("g").attr("class", "ui-layer");
+
+    // Visible on-visualization credits (not affected by zoom/pan).
+    let creditLayer = svg.append("g").attr("class", "credit-layer");
+    renderVisualizationCredits();
+
+    function renderVisualizationCredits() {
+        creditLayer.selectAll("*").remove();
+
+        let textLeft = 12;
+        let textTop = svgHeight - 34;
+
+        let text = creditLayer.append("text")
+            .attr("x", textLeft)
+            .attr("y", textTop)
+            .attr("dominant-baseline", "hanging");
+
+        text.append("tspan")
+            .text(`Sources — Data: ${DATA_SOURCE_URL}`)
+            .attr("x", textLeft)
+            .attr("dy", 0);
+
+        text.append("tspan")
+            .text(`Map image: ${MAP_IMAGE_SOURCE_URL}`)
+            .attr("x", textLeft)
+            .attr("dy", 14);
+
+        // Background panel sized to text for readability.
+        let bbox = text.node().getBBox();
+        creditLayer.insert("rect", "text")
+            .attr("x", bbox.x - 8)
+            .attr("y", bbox.y - 6)
+            .attr("width", bbox.width + 16)
+            .attr("height", bbox.height + 12)
+            .attr("rx", 10)
+            .attr("ry", 10);
+    }
 
     let zoomTransform = d3.zoomIdentity;
     let zoomBehavior = d3.zoom()
