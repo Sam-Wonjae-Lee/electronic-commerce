@@ -1,0 +1,59 @@
+﻿"Cube Title","Product Id","CANSIM Id",URL,"Cube Notes","Archive Status",Frequency,"Start Reference Period","End Reference Period","Total number of dimensions"
+"Electronic commerce, electronic orders, by destination and region",22100073,358-0137,"https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=2210007301",1;2;3;4;7,"ARCHIVED -  a cube publicly available but no longer being updated","Every 2 years",2005-01-01,2009-01-01,3
+
+"Dimension ID","Dimension name","Dimension Notes","Dimension Correction Notes","Dimension Definitions"
+1,Geography,,,
+2,"Destination of electronic orders",,,
+3,"Number and value of electronic orders",,,
+
+"Dimension ID","Member Name","Classification Code","Member ID","Parent Member ID",Terminated,"Member Notes","Member Correction Notes","Member Geo Attribute Keys","Member Definitions"
+1,Canada,,1,,,,,,
+1,"Atlantic provinces",,2,1,,,,,
+1,Quebec,,3,1,,,,,
+1,Ontario,,4,1,,,,,
+1,"Manitoba and Saskatchewan",,5,1,,,,,
+1,Alberta,,6,1,,,,,
+1,"British Columbia",,7,1,,,,,
+2,"Electronic orders to companies in Canada and in other countries",,1,,,,,,
+2,"Electronic orders to companies in Canada",,2,1,,,,,
+2,"Electronic orders to companies in other countries",,3,1,,,,,
+3,"Number of orders",,1,,,5,,,
+3,"Average number of orders",,2,,,5,,,
+3,"Value of orders",,3,,,6,,,
+3,"Average value of orders per person",,4,,,6,,,
+
+Symbol Legend
+Description,Symbol
+"not available for a specific reference period",..
+"less than the limit of detection",<LOD
+"value rounded to 0 (zero) where there is a meaningful distinction between true zero and the value that was rounded",0s
+"data quality: excellent",A
+"data quality: very good",B
+"data quality: good",C
+"data quality: acceptable",D
+"use with caution",E
+"too unreliable to be published",F
+"not applicable",...
+preliminary,p
+revised,r
+"suppressed to meet the confidentiality requirements of the Statistics Act",x
+terminated,t
+
+"Survey Code","Survey Name"
+4432,"Canadian Internet Use Survey"
+
+"Subject Code","Subject Name"
+22,"Information and communications technology "
+
+"Note ID",Note
+1,"The target population for the Canadian Internet use survey has changed from individuals 18 years of age and older in 2005 to individuals 16 years of age and older in 2007."
+2,"Residents of Canada excluding residents of the territories, inmates of institutions, persons living on Indian reserves and full-time members of the Canadian Armed Forces."
+3,"Electronic commerce: Refers to at least one order and/or one payment made on line for a product or service, for personal or household consumption, during the last twelve months."
+4,"Electronic orders: Refers to Internet users who reported to have ordered at least one product or service using the Internet, for personal or household consumption, during the last twelve months, with the payment made or not on Internet. These users may or may not have been window-shoppers."
+5,"Number of orders refers to the number of separate orders made on line, total expressed in thousands."
+6,"Value of electronic orders expressed in thousand Canadian dollars; average value expressed in dollars."
+7,"This CANSIM table has been archived and replaced by the 2010 series of Canadian Internet use tables."
+
+"Correction ID","Correction Date","Correction Note"
+
+

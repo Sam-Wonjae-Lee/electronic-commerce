@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title></title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <section id="title-page" class="title-page">
+        <div class="title-stage">
+            <div class="title-screen" role="region" aria-label="Title screen">
+                <div class="camera-dot" aria-hidden="true"></div>
+                <div class="title-card">
+                    <h1>Abstract Map Of Electronic Commerce In Canada</h1>
+                    <h2>Electronic Orders To Companies</h2>
+                    <p class="title-subtitle">Explore the particle map by province and year.</p>
+                    <a class="title-cta" href="#map-section">View Map</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="map-section" class="map-section">
+        <div class="layout">
+            <aside class="sidebar">
+                <div class="panel-title">Controls</div>
+                <div class="panel-caption">Electronic commerce by province</div>
+
+                <label class="panel-label" for="view-select">View</label>
+                <select class="panel-select" id="view-select">
+                    <option value="map">Map</option>
+                    <option value="stacked">Stacked Chart</option>
+                    <option value="stacked_area">Stacked Area Chart</option>
+                </select>
+
+                <label class="panel-label" for="year-select">Year</label>
+                <select class="panel-select" id="year-select">
+                    <option value="2005">Year 2005</option>
+                    <option value="2007">Year 2007</option>
+                    <option value="2009">Year 2009</option>
+                </select>
+
+                <label class="panel-label" for="metric-select">Metric</label>
+                <select class="panel-select" id="metric-select">
+                    <option value="total_orders">Total Number Of Orders</option>
+                    <option value="avg_orders">Average Number Of Orders</option>
+                    <option value="value_orders">Value Of Orders</option>
+                    <option value="avg_value_per_person">Average Value Of Orders Per Person</option>
+                </select>
+            </aside>
+
+            <main class="content">
+                <div id="map-area">
+                    <button id="zoom-toggle" class="zoom-toggle" type="button" aria-pressed="true">Zoom: On</button>
+                </div>
+                <div class="timeline" aria-label="Year timeline">
+                    <button id="year-prev" class="timeline-btn" type="button" aria-label="Previous year">‹</button>
+                    <div class="timeline-track">
+                        <input id="year-timeline" class="timeline-range" type="range" min="0" max="2" step="1" value="0" />
+                        <div class="timeline-labels" aria-hidden="true">
+                            <span class="timeline-label" data-year="2005">2005</span>
+                            <span class="timeline-label" data-year="2007">2007</span>
+                            <span class="timeline-label" data-year="2009">2009</span>
+                        </div>
+                    </div>
+                    <button id="year-next" class="timeline-btn" type="button" aria-label="Next year">›</button>
+                </div>
+            </main>
+        </div>
+    </section>
+    
+    <script src="js/intro.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
