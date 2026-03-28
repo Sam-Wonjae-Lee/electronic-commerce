@@ -160,7 +160,13 @@ d3.csv("data/22100073.csv").then(function(data){
     })
 
     let regionNames = Object.keys(provinceShapes);
-    let viewModes = { map: "map", stacked: "stacked", stacked_area: "stacked_area" };
+    let viewModes = {
+        map: "map",
+        stacked: "stacked",
+        stacked_area: "stacked_area",
+        pie: "pie",
+        bar: "bar"
+    };
 
     let line = d3.line().curve(d3.curveLinearClosed);
 
@@ -170,6 +176,7 @@ d3.csv("data/22100073.csv").then(function(data){
     let provinceLayer = viewport.append("g").attr("class", "province-layer");
     let particleLayer = viewport.append("g").attr("class", "particle-layer");
     let labelLayer = viewport.append("g").attr("class", "label-layer");
+    let uiLayer = viewport.append("g").attr("class", "ui-layer");
 
     let zoomTransform = d3.zoomIdentity;
     let zoomBehavior = d3.zoom()
@@ -1092,9 +1099,8 @@ d3.csv("data/22100073.csv").then(function(data){
 
     function drawProvinces(viewMode) {
         provinceLayer.selectAll("*").remove();
-        bgLayer.selectAll("*").remove();
 
-        if (viewMode === viewModes.stacked || viewMode === viewModes.stacked_area) return;
+        if (viewMode !== viewModes.map) return;
 
         if (mapMask.ready) {
             drawMapBackground();
@@ -1116,7 +1122,7 @@ d3.csv("data/22100073.csv").then(function(data){
     function drawLabels(viewMode) {
         labelLayer.selectAll("*").remove();
 
-        if (viewMode === viewModes.stacked || viewMode === viewModes.stacked_area) return;
+        if (viewMode !== viewModes.map) return;
         if (mapMask.ready) return;
 
         labelLayer.selectAll(".province-label")
@@ -1237,13 +1243,304 @@ d3.csv("data/22100073.csv").then(function(data){
         return fmt(v);
     }
 
+    function metricTitle(metricKey) {
+        if (metricKey === "avg_orders") return "Average number of orders";
+        if (metricKey === "value_orders") return "Value of orders";
+        if (metricKey === "avg_value_per_person") return "Average value of orders per person";
+        return "Total number of orders";
+    }
+
+    function getRegionMetricEntriesForYear(yearStr, metricKey) {
+        let cfg = metricConfig[metricKey] || metricConfig.total_orders;
+        return regionNames.map(region => {
+            let info = getProvinceData(String(yearStr), region);
+            let v = cfg.getValue(info);
+            v = Number.isFinite(v) ? Math.max(0, v) : 0;
+            return { region, value: v };
+        });
+    }
+
+    function showChartTooltip(event, html) {
+        tooltip
+            .style("opacity", 1)
+            .html(html)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+    }
+
+    function hideChartTooltip() {
+        tooltip.style("opacity", 0);
+    }
+
+    function updateFactsPanel(selectedYear, selectedMetric) {
+        let panel = document.getElementById("facts-panel");
+        if (!panel) return;
+
+        let yearStr = String(selectedYear || "");
+        let metricKey = selectedMetric || "total_orders";
+        let title = metricTitle(metricKey);
+        let fmt = metricFormat[metricKey]?.value || (v => String(v));
+
+        let metricBlurb = {
+            total_orders: "Counts how many electronic orders businesses made to companies in Canada (number of orders).",
+            avg_orders: "Average number of electronic orders per business (number of orders).",
+            value_orders: "Total dollar value of electronic orders (dollars).",
+            avg_value_per_person: "Average dollar value of electronic orders per person (dollars)."
+        };
+
+        let entries = getRegionMetricEntriesForYear(yearStr, metricKey);
+        let total = d3.sum(entries, d => d.value);
+
+        let max = entries.reduce((best, cur) => (cur.value > best.value ? cur : best), entries[0] || { region: "", value: 0 });
+        let nonZero = entries.filter(d => d.value > 0);
+        let minNonZero = nonZero.reduce((best, cur) => (cur.value < best.value ? cur : best), nonZero[0] || null);
+
+        let overviewFacts = [];
+        let leadersFacts = [];
+        let changeFacts = [];
+
+        overviewFacts.push(`<li><strong>What it measures:</strong> ${metricBlurb[metricKey] || "Metric details unavailable."}</li>`);
+        if (total > 0) {
+            overviewFacts.push(`<li><strong>Total across provinces:</strong> ${fmt(total)}</li>`);
+
+            leadersFacts.push(`<li><strong>Highest province:</strong> ${max.region} (${fmt(max.value)})</li>`);
+            if (minNonZero) leadersFacts.push(`<li><strong>Lowest non-zero province:</strong> ${minNonZero.region} (${fmt(minNonZero.value)})</li>`);
+            let share = (max.value / total) * 100;
+            if (Number.isFinite(share)) leadersFacts.push(`<li><strong>Largest share:</strong> ${max.region} is ${d3.format(".1f")(share)}% of the total</li>`);
+        } else {
+            overviewFacts.push(`<li class="facts-muted">No non-zero values for this metric/year.</li>`);
+        }
+
+        let yearOrder = ["2005", "2007", "2009"];
+        let idx = yearOrder.indexOf(yearStr);
+        let prevYear = idx > 0 ? yearOrder[idx - 1] : null;
+        if (prevYear) {
+            let prevEntries = getRegionMetricEntriesForYear(prevYear, metricKey);
+            let prevTotal = d3.sum(prevEntries, d => d.value);
+            let deltaTotal = total - prevTotal;
+            let pctTotal = (prevTotal > 0) ? (deltaTotal / prevTotal) * 100 : null;
+
+            if (Number.isFinite(deltaTotal)) {
+                changeFacts.push(`<li><strong>Total change vs ${prevYear}:</strong> ${fmt(deltaTotal)} (${pctTotal == null ? "N/A" : (d3.format("+.1f")(pctTotal) + "%")})</li>`);
+            }
+
+            let prevByRegion = new Map(prevEntries.map(d => [d.region, d.value]));
+            let bestUp = null;
+            let bestDown = null;
+            entries.forEach(d => {
+                let pv = prevByRegion.get(d.region) ?? 0;
+                let delta = d.value - pv;
+                if (bestUp == null || delta > bestUp.delta) bestUp = { region: d.region, delta, prev: pv, cur: d.value };
+                if (bestDown == null || delta < bestDown.delta) bestDown = { region: d.region, delta, prev: pv, cur: d.value };
+            });
+
+            if (bestUp && Number.isFinite(bestUp.delta) && bestUp.delta > 0) {
+                let pct = (bestUp.prev > 0) ? (bestUp.delta / bestUp.prev) * 100 : null;
+                changeFacts.push(`<li><strong>Biggest increase:</strong> ${bestUp.region} (${fmt(bestUp.delta)}; ${pct == null ? "N/A" : (d3.format("+.1f")(pct) + "%")})</li>`);
+            }
+            if (bestDown && Number.isFinite(bestDown.delta) && bestDown.delta < 0) {
+                let pct = (bestDown.prev > 0) ? (bestDown.delta / bestDown.prev) * 100 : null;
+                changeFacts.push(`<li><strong>Biggest decrease:</strong> ${bestDown.region} (${fmt(bestDown.delta)}; ${pct == null ? "N/A" : (d3.format("+.1f")(pct) + "%")})</li>`);
+            }
+        } else {
+            changeFacts.push(`<li class="facts-muted">No earlier year to compare (timeline starts at ${yearStr}).</li>`);
+        }
+
+        function card(title, items) {
+            let list = items.length ? `<ul class="fact-card-list">${items.join("")}</ul>` : `<div class="facts-muted">No facts available.</div>`;
+            return `<div class="fact-card"><div class="fact-card-title">${title}</div>${list}</div>`;
+        }
+
+        panel.innerHTML = `
+            <div class="facts-header">
+                <div class="facts-title">Interesting facts</div>
+                <div class="facts-subtitle">${title} · ${yearStr}</div>
+            </div>
+            <div class="facts-grid">
+                ${card("Overview", overviewFacts)}
+                ${card("Leaders", leadersFacts)}
+                ${card("Change", changeFacts)}
+            </div>
+        `;
+    }
+
+    function drawPieChart(selectedYear, selectedMetric) {
+        let entries = getRegionMetricEntriesForYear(selectedYear, selectedMetric)
+            .filter(d => d.value > 0)
+            .sort((a, b) => b.value - a.value);
+
+        let total = d3.sum(entries, d => d.value);
+        if (!(total > 0) || !entries.length) {
+            uiLayer.append("text")
+                .attr("x", 12)
+                .attr("y", 18)
+                .attr("fill", "#111827")
+                .attr("font-family", "system-ui")
+                .attr("font-size", 12)
+                .attr("font-weight", 650)
+                .text(`Pie chart: ${metricTitle(selectedMetric)} (${selectedYear}) — no data`);
+            return;
+        }
+
+        let legendW = 330;
+        let cx = Math.max(legendW + 230, svgWidth * 0.62);
+        let cy = svgHeight * 0.52;
+        let outerR = Math.min(190, Math.min(svgWidth - cx - 18, svgHeight * 0.44));
+        let innerR = outerR * 0.58;
+
+        uiLayer.append("text")
+            .attr("x", 12)
+            .attr("y", 18)
+            .attr("fill", "#111827")
+            .attr("font-family", "system-ui")
+            .attr("font-size", 12)
+            .attr("font-weight", 650)
+            .text(`Pie chart: ${metricTitle(selectedMetric)} (${selectedYear})`);
+
+        let fmtPct = d3.format(".1f");
+
+        // Center label (particles form the donut; this is just the label)
+        uiLayer.append("text")
+            .attr("text-anchor", "middle")
+            .attr("x", cx)
+            .attr("y", cy - 4)
+            .attr("fill", "#111827")
+            .attr("font-family", "system-ui")
+            .attr("font-size", 12)
+            .attr("font-weight", 700)
+            .text(String(selectedYear));
+
+        uiLayer.append("text")
+            .attr("text-anchor", "middle")
+            .attr("x", cx)
+            .attr("y", cy + 14)
+            .attr("fill", "#374151")
+            .attr("font-family", "system-ui")
+            .attr("font-size", 11)
+            .text(metricTitle(selectedMetric));
+
+        (function drawPieLegend() {
+            let pad = 10;
+            let rowH = 18;
+            let titleH = 18;
+            let legendX = 12;
+            let legendY = 32;
+            let legendH = pad * 2 + titleH + entries.length * rowH;
+
+            let box = uiLayer.append("g").attr("class", "pie-legend");
+            box.append("rect")
+                .attr("x", legendX)
+                .attr("y", legendY)
+                .attr("width", legendW)
+                .attr("height", legendH)
+                .attr("rx", 10)
+                .attr("fill", "rgba(255,255,255,0.92)");
+
+            box.append("text")
+                .attr("x", legendX + pad)
+                .attr("y", legendY + pad + 12)
+                .attr("fill", "#111827")
+                .attr("font-family", "system-ui")
+                .attr("font-size", 12)
+                .attr("font-weight", 650)
+                .text("Province share (%)");
+
+            entries.forEach((d, i) => {
+                let yy = legendY + pad + titleH + i * rowH + 12;
+                let pct = (d.value / total) * 100;
+
+                box.append("rect")
+                    .attr("x", legendX + pad)
+                    .attr("y", yy - 10)
+                    .attr("width", 10)
+                    .attr("height", 10)
+                    .attr("rx", 2)
+                    .attr("fill", provinceColours[d.region] || "#6b7280");
+
+                box.append("text")
+                    .attr("x", legendX + pad + 16)
+                    .attr("y", yy)
+                    .attr("fill", "#111827")
+                    .attr("font-family", "system-ui")
+                    .attr("font-size", 12)
+                    .text(d.region);
+
+                box.append("text")
+                    .attr("x", legendX + legendW - pad)
+                    .attr("y", yy)
+                    .attr("fill", "#111827")
+                    .attr("font-family", "system-ui")
+                    .attr("font-size", 12)
+                    .attr("text-anchor", "end")
+                    .text(`${fmtPct(pct)}%`);
+            });
+        })();
+    }
+
+    function drawBarChart(selectedYear, selectedMetric) {
+        let entries = getRegionMetricEntriesForYear(selectedYear, selectedMetric)
+            .filter(d => d.value > 0)
+            .sort((a, b) => b.value - a.value);
+
+        let pad = { left: 210, right: 22, top: 34, bottom: 34 };
+        let innerW = svgWidth - pad.left - pad.right;
+        let innerH = svgHeight - pad.top - pad.bottom;
+
+        uiLayer.append("text")
+            .attr("x", 12)
+            .attr("y", 18)
+            .attr("fill", "#111827")
+            .attr("font-family", "system-ui")
+            .attr("font-size", 12)
+            .attr("font-weight", 650)
+            .text(`Bar chart: ${metricTitle(selectedMetric)} (${selectedYear})`);
+
+        if (!entries.length) {
+            uiLayer.append("text")
+                .attr("x", 12)
+                .attr("y", 40)
+                .attr("fill", "#6b7280")
+                .attr("font-family", "system-ui")
+                .attr("font-size", 12)
+                .text("No non-zero values for this year/metric.");
+            return;
+        }
+
+        let maxV = d3.max(entries, d => d.value) || 1;
+        let x = d3.scaleLinear().domain([0, maxV]).nice().range([pad.left, pad.left + innerW]);
+        let y = d3.scaleBand().domain(entries.map(d => d.region)).range([pad.top, pad.top + innerH]).padding(0.22);
+
+        bgLayer.append("rect")
+            .attr("x", pad.left)
+            .attr("y", pad.top)
+            .attr("width", innerW)
+            .attr("height", innerH)
+            .attr("fill", "#ffffff")
+            .attr("stroke", "#e5e7eb");
+
+        let xAxis = d3.axisBottom(x).ticks(5).tickFormat(metricFormat[selectedMetric]?.axis || d3.format(".2s"));
+        let yAxis = d3.axisLeft(y).tickSize(0);
+
+        uiLayer.append("g")
+            .attr("transform", `translate(0,${pad.top + innerH})`)
+            .call(xAxis)
+            .call(g => g.selectAll("text").attr("font-family", "system-ui").attr("font-size", 11))
+            .call(g => g.selectAll("path,line").attr("stroke", "#9ca3af"));
+
+        uiLayer.append("g")
+            .attr("transform", `translate(${pad.left},0)`)
+            .call(yAxis)
+            .call(g => g.selectAll("text").attr("font-family", "system-ui").attr("font-size", 12))
+            .call(g => g.selectAll("path").remove());
+    }
+
     function drawParticles(selectedYear, selectedMetric, viewMode) {
         let cfg = metricConfig[selectedMetric] || metricConfig.total_orders;
         let particles = [];
 
         function relocateIsolatedParticles(particles) {
             // Fix stray single particles by moving them to a denser spot inside their own region mask.
-            if (!mapMask.ready) return;
+            if (viewMode !== viewModes.map || !mapMask.ready) return;
 
             let cellSize = 8;
             let radius = 14;
@@ -1623,6 +1920,140 @@ d3.csv("data/22100073.csv").then(function(data){
             return sampled;
         }
 
+        function samplePointsWithReplacement(points, need, rng, jitter = 1.4) {
+            if (need <= 0) return [];
+            if (!points || !points.length) return [];
+            if (points.length >= need) return points.slice(0, need);
+
+            let out = new Array(need);
+            for (let i = 0; i < need; i++) {
+                let p = points[i % points.length];
+                let dx = (rng() - 0.5) * 2 * jitter;
+                let dy = (rng() - 0.5) * 2 * jitter;
+                out[i] = [p[0] + dx, p[1] + dy];
+            }
+            return out;
+        }
+
+        function computePiePositionsByRegion(countsByRegion) {
+            let legendW = 330;
+            let cx = Math.max(legendW + 230, svgWidth * 0.62);
+            let cy = svgHeight * 0.52;
+            let outerR = Math.min(190, Math.min(svgWidth - cx - 18, svgHeight * 0.44));
+            let innerR = outerR * 0.58;
+
+            let cfgLocal = metricConfig[selectedMetric] || metricConfig.total_orders;
+            let rows = regionNames.map(region => {
+                let info = getProvinceData(selectedYear, region);
+                let raw = cfgLocal.getValue(info);
+                let v = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+                return { region, value: v };
+            });
+
+            let totalNeed = d3.sum(regionNames, r => (countsByRegion.get(r) || 0));
+            if (!(totalNeed > 0)) totalNeed = 1;
+            let donutArea = Math.PI * (outerR * outerR - innerR * innerR);
+            let cell = Math.sqrt((donutArea / totalNeed) * 1.2);
+            cell = Math.max(1.8, Math.min(4.8, cell));
+
+            let pie = d3.pie()
+                .sort(null)
+                .value(d => d.value);
+
+            let arcs = pie(rows);
+
+            let candidateByRegion = new Map();
+            regionNames.forEach(r => candidateByRegion.set(r, []));
+
+            for (let i = 0; i < arcs.length; i++) {
+                let a = arcs[i];
+                let region = a.data.region;
+                let need = countsByRegion.get(region) || 0;
+                if (need <= 0 || !(a.endAngle > a.startAngle)) continue;
+
+                let pts = candidateByRegion.get(region);
+                for (let r = innerR + cell * 0.5; r <= outerR; r += cell) {
+                    let arcLen = r * (a.endAngle - a.startAngle);
+                    let nTheta = Math.max(1, Math.floor(arcLen / cell));
+                    let step = (a.endAngle - a.startAngle) / nTheta;
+                    for (let k = 0; k < nTheta; k++) {
+                        let theta = a.startAngle + (k + 0.5) * step;
+                        pts.push([
+                            cx + r * Math.cos(theta),
+                            cy + r * Math.sin(theta)
+                        ]);
+                    }
+                }
+            }
+
+            let sampled = new Map();
+            regionNames.forEach(region => {
+                let need = countsByRegion.get(region) || 0;
+                if (need <= 0) {
+                    sampled.set(region, []);
+                    return;
+                }
+                let pts = candidateByRegion.get(region) || [];
+                let rng = mulberry32(fnv1a32(`${selectedMetric}|${selectedYear}|pie|${region}`));
+                for (let i = pts.length - 1; i > 0; i--) {
+                    let j = (rng() * (i + 1)) | 0;
+                    let tmp = pts[i]; pts[i] = pts[j]; pts[j] = tmp;
+                }
+                sampled.set(region, samplePointsWithReplacement(pts, need, rng, 1.6));
+            });
+
+            return sampled;
+        }
+
+        function computeBarPositionsByRegion(countsByRegion) {
+            let entries = getRegionMetricEntriesForYear(selectedYear, selectedMetric)
+                .filter(d => d.value > 0)
+                .sort((a, b) => b.value - a.value);
+
+            let pad = { left: 210, right: 22, top: 34, bottom: 34 };
+            let innerW = svgWidth - pad.left - pad.right;
+            let innerH = svgHeight - pad.top - pad.bottom;
+
+            let maxV = d3.max(entries, d => d.value) || 1;
+            let x = d3.scaleLinear().domain([0, maxV]).nice().range([pad.left, pad.left + innerW]);
+            let y = d3.scaleBand().domain(entries.map(d => d.region)).range([pad.top, pad.top + innerH]).padding(0.22);
+
+            let sampled = new Map();
+            regionNames.forEach(region => sampled.set(region, []));
+
+            entries.forEach(d => {
+                let region = d.region;
+                let need = countsByRegion.get(region) || 0;
+                if (need <= 0) return;
+
+                let barW = Math.max(0, x(d.value) - pad.left);
+                let y0 = y(region);
+                if (y0 == null) return;
+                let barH = y.bandwidth();
+                if (!(barW > 0 && barH > 0)) return;
+
+                let area = barW * barH;
+                let cell = Math.sqrt((area / need) * 1.35);
+                cell = Math.max(1.7, Math.min(4.6, cell));
+
+                let pts = [];
+                for (let px = pad.left + cell * 0.5; px <= pad.left + barW - cell * 0.35; px += cell) {
+                    for (let py = y0 + cell * 0.5; py <= y0 + barH - cell * 0.35; py += cell) {
+                        pts.push([px, py]);
+                    }
+                }
+
+                let rng = mulberry32(fnv1a32(`${selectedMetric}|${selectedYear}|bar|${region}`));
+                for (let i = pts.length - 1; i > 0; i--) {
+                    let j = (rng() * (i + 1)) | 0;
+                    let tmp = pts[i]; pts[i] = pts[j]; pts[j] = tmp;
+                }
+                sampled.set(region, samplePointsWithReplacement(pts, need, rng, 1.1));
+            });
+
+            return sampled;
+        }
+
         regionNames.forEach(region => {
             let info = getProvinceData(selectedYear, region);
             let value = cfg.getValue(info);
@@ -1689,6 +2120,40 @@ d3.csv("data/22100073.csv").then(function(data){
             for (let i = 0; i < particles.length; i++) {
                 let p = particles[i];
                 let pts = areaPts.get(p.location);
+                if (!pts || !pts.length) continue;
+                let idx = offsetByRegion.get(p.location) || 0;
+                if (idx >= pts.length) continue;
+                let pt = pts[idx];
+                offsetByRegion.set(p.location, idx + 1);
+                p.x = pt[0];
+                p.y = pt[1];
+            }
+        }
+
+        if (viewMode === viewModes.pie) {
+            let piePts = computePiePositionsByRegion(countsByRegion);
+            let offsetByRegion = new Map();
+            regionNames.forEach(r => offsetByRegion.set(r, 0));
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                let pts = piePts.get(p.location);
+                if (!pts || !pts.length) continue;
+                let idx = offsetByRegion.get(p.location) || 0;
+                if (idx >= pts.length) continue;
+                let pt = pts[idx];
+                offsetByRegion.set(p.location, idx + 1);
+                p.x = pt[0];
+                p.y = pt[1];
+            }
+        }
+
+        if (viewMode === viewModes.bar) {
+            let barPts = computeBarPositionsByRegion(countsByRegion);
+            let offsetByRegion = new Map();
+            regionNames.forEach(r => offsetByRegion.set(r, 0));
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                let pts = barPts.get(p.location);
                 if (!pts || !pts.length) continue;
                 let idx = offsetByRegion.get(p.location) || 0;
                 if (idx >= pts.length) continue;
@@ -1856,7 +2321,15 @@ d3.csv("data/22100073.csv").then(function(data){
         }
 
         chartLayer.selectAll("*").remove();
+        bgLayer.selectAll("*").remove();
+        provinceLayer.selectAll("*").remove();
+        labelLayer.selectAll("*").remove();
+        uiLayer.selectAll("*").remove();
+        hideChartTooltip();
+        updateFactsPanel(year, metric);
         if (viewMode === viewModes.stacked_area) drawStackedAreaChart(year, metric);
+        if (viewMode === viewModes.pie) drawPieChart(year, metric);
+        if (viewMode === viewModes.bar) drawBarChart(year, metric);
         if (viewMode === viewModes.map) drawMapLegend();
 
         drawProvinces(viewMode);
