@@ -227,12 +227,15 @@ body {
 #map-area svg {
     max-width: 100%;
     cursor: grab;
+    position: relative;
+    z-index: 0;
 }
 
 .zoom-toggle {
     position: absolute;
     right: 12px;
     bottom: 12px;
+    z-index: 2;
     width: 110px;
     height: 34px;
     border-radius: 10px;
@@ -257,6 +260,7 @@ body {
     position: absolute;
     left: 12px;
     bottom: 12px;
+    z-index: 2;
     padding: 6px 10px;
     border-radius: 10px;
     border: 1px solid rgba(209, 213, 219, 0.95);

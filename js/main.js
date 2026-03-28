@@ -192,6 +192,15 @@ d3.csv("data/22100073.csv").then(function(data){
         let textLeft = 12;
         let textTop = svgHeight - 34;
 
+        // Background panel for readability (sized after layout).
+        let background = creditLayer.append("rect")
+            .attr("x", 8)
+            .attr("y", svgHeight - 46)
+            .attr("width", 10)
+            .attr("height", 10)
+            .attr("rx", 10)
+            .attr("ry", 10);
+
         let text = creditLayer.append("text")
             .attr("x", textLeft)
             .attr("y", textTop)
@@ -207,15 +216,21 @@ d3.csv("data/22100073.csv").then(function(data){
             .attr("x", textLeft)
             .attr("dy", 14);
 
-        // Background panel sized to text for readability.
-        let bbox = text.node().getBBox();
-        creditLayer.insert("rect", "text")
-            .attr("x", bbox.x - 8)
-            .attr("y", bbox.y - 6)
-            .attr("width", bbox.width + 16)
-            .attr("height", bbox.height + 12)
-            .attr("rx", 10)
-            .attr("ry", 10);
+        // Size the background after the browser has laid out the text.
+        requestAnimationFrame(() => {
+            if (!text.node()) return;
+            let bbox;
+            try {
+                bbox = text.node().getBBox();
+            } catch (e) {
+                return;
+            }
+            background
+                .attr("x", bbox.x - 8)
+                .attr("y", bbox.y - 6)
+                .attr("width", bbox.width + 16)
+                .attr("height", bbox.height + 12);
+        });
     }
 
     let zoomTransform = d3.zoomIdentity;
